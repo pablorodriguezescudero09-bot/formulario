@@ -2238,6 +2238,11 @@ const ejList=()=>{ const mat=curMat(); return EJ.filter(x=>matOfT(x.tema)===mat)
 const dgList=()=>{ const mat=curMat(); return DG.filter(x=>matOfT(x.tema)===mat); };
 // sustituye cada magnitud por su número (conservando la clave para la información al pasar el cursor)
 function subst(n,V,src){ if(!n) return n; if(n.op==='var') return V[n.k]!==undefined?{op:'num',v:V[n.k],k:n.k,src:src[n.k]||''}:n; const c={...n}; if(n.a) c.a=subst(n.a,V,src); if(n.b) c.b=subst(n.b,V,src); return c; }
+// como ev, pero una resta casi exacta o un seno/coseno casi nulo valen 0 exacto (restos de redondeo, también de datos como π escrito con 10 decimales); no depende del tamaño de los datos
+function evSnap(n,V){ switch(n.op){
+  case 'add': case 'sub': { const a=evSnap(n.a,V), b=evSnap(n.b,V), r=n.op==='add'?a+b:a-b; return Math.abs(r)<=1e-9*Math.max(Math.abs(a),Math.abs(b))?0:r; }
+  case 'sin': case 'cos': case 'tan': { const x=evSnap(n.a,V), r=Math[n.op](x); return Math.abs(r)<1e-9*Math.max(1,Math.abs(x))?0:r; }
+  default: return n.a?ev({...n,a:{op:'num',v:evSnap(n.a,V)},...(n.b?{b:{op:'num',v:evSnap(n.b,V)}}:{})},V):ev(n,V); } }
 function ejSolve(x,names){ const pn=i=>names&&names[i]?names[i]:i+1;
   const V={}, SRC={}; Object.entries(MAG).forEach(([k,m])=>{ if(m.valor!==undefined){ const v=parseFloat(String(m.valor)); if(isFinite(v)){ V[k]=v; SRC[k]='constante del glosario'; } } });
   Object.entries(x.datos||{}).forEach(([k,v])=>{ V[k]=v; SRC[k]='dato del enunciado'; });
@@ -2251,7 +2256,7 @@ function ejSolve(x,names){ const pn=i=>names&&names[i]?names[i]:i+1;
       const steps=solve(e.L,e.R,k), fin=steps[steps.length-1]; r.fin=fin; r.trivial=steps.length===1;   // ya estaba despejada
       if(!(fin.L.op==='var'&&fin.L.k===k)){ r.err='La app no consigue despejar esta incógnita.'; out.push(r); return; }
       const need=vlist(fin.R), miss=need.filter(q=>V[q]===undefined); r.miss=miss;
-      if(!miss.length){ r.sub=subst(fin.R,V,SRC); let val=ev(fin.R,V); const ins=need.map(q=>Math.abs(V[q])).filter(v=>v>0); if(isFinite(val)&&Math.abs(val)<1e-9*(ins.length?Math.min(...ins):1)) val=0;   // resto de redondeo (sen π…) → 0
+      if(!miss.length){ r.sub=subst(fin.R,V,SRC); const val=evSnap(fin.R,V);   // solo los restos de redondeo (sen π, restas casi exactas) pasan a 0; un número pequeño de verdad se conserva
         r.val=val; if(isFinite(val)){ V[k]=val; SRC[k]=`calculado en el paso ${pn(i)}`; } else r.err='Con esos valores no sale un número real.'; } }
     out.push(r); });
   return {pasos:out,V,SRC};
