@@ -703,6 +703,11 @@ details.grp>summary{transform-origin:0 50%}
   .nd:hover rect{transform:scale(1.04)}
 }
 .ejex.grp{border-color:var(--accent);color:var(--accent)}
+.popout{margin-left:8px;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:7px;padding:1px 8px;font:inherit;font-size:.72rem;letter-spacing:.04em;cursor:pointer;vertical-align:1px}
+.popout:hover{color:var(--accent);border-color:var(--accent)}
+@media (hover:none){.popout{display:none}}
+/* con ratón o trackpad, «atrás» es el gesto de dos dedos o ⌘[: el botón solo queda en el móvil */
+@media (hover:hover) and (pointer:fine){#back{display:none!important}}
 @media (pointer:coarse){.inp,.search input,select,textarea{font-size:16px}.dgsvg{touch-action:pan-y}.dgsvg.measure{touch-action:none}.dgrz{width:30px;height:30px}}
 .ejgrs{margin-top:2px}
 </style>
@@ -1541,7 +1546,7 @@ function matEnter(m){ const old=S.mat, dev=S.view==='m'||S.view==='d';
   S.mat=m; if(!(byId[S.id]&&inScope(byId[S.id],m)&&!isHid(S.id))){ const f=F.find(f=>matOf(f)===m)||F.find(f=>inScope(f,m)); S.id=f?f.id:null; S.u=null; }
   if(!dev){ if(c.view) S.view=c.view; else if(S.view==='e') S.view='f'; }
   S.confirm=null; }
-function saveUI(){ try{ const mats={}; Object.entries(S.matMem).forEach(([m,c])=>{ mats[m]={view:c.view,id:c.id,gv:c.gv,gx:c.gx,fn:c.fn,ej:c.ej,dg:c.dg}; });
+function saveUI(){ if(POP) return; try{ const mats={}; Object.entries(S.matMem).forEach(([m,c])=>{ mats[m]={view:c.view,id:c.id,gv:c.gv,gx:c.gx,fn:c.fn,ej:c.ej,dg:c.dg}; });
   localStorage.setItem('formulario.ui',JSON.stringify({id:S.id,mat:S.mat,view:S.view==='e'?'f':S.view,gv:S.gv,gx:S.gx,fn:S.fn,ej:S.ej,dg:S.dg,filt:S.filt,closed:[...S.closed],mats,ejfs:S.ejFs,dgw:S.dgW,ejgr:S.ejGrM})); }catch(e){} }
 // qué pestañas tienen algo en esta asignatura
 function viewAvail(m){ const inM=x=>matOfT(x.tema)===m, FO=foreign(m), cur=m===S.mat, nf=F.some(f=>matOf(f)===m)||FO.size>0, ne=EJ.some(inM), nd=DG.some(inM); occ();
@@ -3099,6 +3104,7 @@ function render(){
   else if(S.view==='d'){ renderDatos(); }
   else if(S.view==='e'){ renderEditor(); }
   else { renderNav(); renderMain(); }
+  { const c=popCur(), eb=document.querySelector('#main .eyebrow'); if(c&&eb&&!S.draft&&!S.jdraft&&!S.fdraft&&!eb.querySelector('.popout')) eb.insertAdjacentHTML('beforeend','<button class="popout" title="Abre esto en otra ventana para verlo a la vez que otra cosa. También: ⌘+clic en la lista">⧉ Otra ventana</button>'); }
   saveUI();
   gridAlign();
 }
@@ -3108,7 +3114,19 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 const HIST=[];
 const snap=()=>({view:S.view,id:S.id,u:S.u,gv:S.gv,mat:S.mat,gx:S.gx,fn:S.fn,ej:S.ej,dg:S.dg});
 function go(fn){ if(S.view==='e'&&S.draft){ S.draft=null; toast('Has salido del editor sin guardar los cambios.'); } const s=snap(); fn(); const n=snap();
-  if(s.view!=='e'&&s.mat===n.mat&&(s.view!==n.view||(n.view==='f'&&s.id!==n.id)||(n.view==='g'&&s.gv!==n.gv)||(n.view==='x'&&s.gx!==n.gx)||(n.view==='n'&&s.fn!==n.fn)||(n.view==='j'&&s.ej!==n.ej)||(n.view==='y'&&s.dg!==n.dg))) HIST.push(s); updBack(); }
+  if(s.view!=='e'&&s.mat===n.mat&&(s.view!==n.view||(n.view==='f'&&s.id!==n.id)||(n.view==='g'&&s.gv!==n.gv)||(n.view==='x'&&s.gx!==n.gx)||(n.view==='n'&&s.fn!==n.fn)||(n.view==='j'&&s.ej!==n.ej)||(n.view==='y'&&s.dg!==n.dg))){ HIST.push(s); try{ history.pushState({fz:NAVD+1},''); NAVD++; }catch(e){} } updBack(); }
+// el «Atrás» del navegador (gesto de dos dedos en el trackpad, botón de Chrome, ⌘[) recorre la misma lista que el botón de la app
+// otra ventana: la dirección lleva lo que hay que abrir (#f:id, #j:id, #g:clave, #x:id, #n:id, #y:id)
+const POPK={f:'id',j:'ej',g:'gv',x:'gx',n:'fn',y:'dg'}; let POP=false;
+function popOut(v,id){ const u=location.href.split('#')[0]+'#'+v+':'+encodeURIComponent(id); const w=window.open(u,'_blank','popup,width=1100,height=900'); if(!w) toast('El navegador ha bloqueado la ventana nueva: permite las ventanas emergentes para esta página.'); }
+function popCur(){ const v=S.view==='e'?'f':S.view; return POPK[v]&&S[POPK[v]]?[v,S[POPK[v]]]:null; }
+function popHash(){ const m=(location.hash||'').match(/^#([fjgxny]):(.+)$/); if(!m) return false; const v=m[1], id=decodeURIComponent(m[2]);
+  const ok=v==='f'?!!byId[id]:v==='g'?!!MAG[id]:v==='j'?ALL.EJ.some(x=>x.id===id):v==='x'?ALL.GR.some(x=>x.id===id):v==='n'?ALL.FN.some(x=>x.id===id):ALL.DG.some(x=>x.id===id); if(!ok) return false;
+  POP=true; S[POPK[v]]=id; S.view=v; if(v==='x'||v==='n'||v==='y') S.vsub=v;
+  const t=v==='f'?byId[id].tema:v==='j'?ALL.EJ.find(x=>x.id===id).tema:v==='x'?ALL.GR.find(x=>x.id===id).tema:v==='n'?ALL.FN.find(x=>x.id===id).tema:v==='y'?ALL.DG.find(x=>x.id===id).tema:null; if(t) S.mat=matOfT(t); if(v!=='f') S.id=(F.find(f=>matOf(f)===S.mat)||{}).id||null;
+  try{ history.replaceState(null,'',location.href.split('#')[0]); }catch(e){} return true; }
+let NAVD=0;   // posición actual en el historial del navegador
+function navBack(){ if(history.state&&history.state.fz) history.back(); else back(); }
 function back(){ const s=HIST.pop(); if(!s) return; S.draft=null; if(s.mat&&s.mat!==S.mat) matEnter(s.mat); Object.assign(S,s,{reveal:false,shown:S.repaso?0:999,ds:S.repaso?0:999,mapSel:null}); render(); updBack(); toMain(); }
 function updBack(){ const b=document.getElementById('back'); if(!HIST.length){ b.hidden=true; return; }
   const s=HIST[HIST.length-1];
@@ -3136,6 +3154,7 @@ function boot(){
     if(typeof u.mat==='string') S.mat=u.mat; if(u.id&&byId[u.id]) S.id=u.id; if(['f','g','m','x','n','j','y','p','d'].includes(u.view)) S.view=u.view; if(u.gv&&MAG[u.gv]) S.gv=u.gv; ['gx','fn','ej','dg'].forEach(k=>{ if(typeof u[k]==='string') S[k]=u[k]; });
     if(u.ejgr&&typeof u.ejgr==='object') S.ejGrM={...u.ejgr}; if(u.dgw&&typeof u.dgw==='object') Object.entries(u.dgw).forEach(([k,v])=>{ if(+v>0) S.dgW[k]=+v; }); if(u.mats&&typeof u.mats==='object') S.matMem=u.mats; if(u.ejfs&&typeof u.ejfs==='object') Object.entries(u.ejfs).forEach(([m,v])=>{ if(v&&Array.isArray(v.ids)) S.ejFs[m]={ids:v.ids.filter(x=>typeof x==='string'),mode:v.mode==='only'?'only':'any',open:!!v.open}; });
     if(['all','both','claude','mine'].includes(u.filt)) S.filt=u.filt; if(Array.isArray(u.closed)) S.closed=new Set(u.closed); }catch(e){}
+  popHash();   // abierto con «otra ventana»: va directo a esa ficha y no cambia lo que recuerda la ventana principal
   if(!S.id) S.id=(F.find(f=>S.mat&&matOf(f)===S.mat)||F[0]||{}).id||null;   // sin fórmula guardada: la primera de la asignatura guardada
   try{ if(localStorage.getItem('formulario.font')==='forgetica'){ document.documentElement.dataset.font='forgetica'; const b=document.getElementById('tgF'); if(b) b.setAttribute('aria-pressed','true'); } }catch(e){}
   loadFontData();
@@ -3144,14 +3163,19 @@ function boot(){
   addEventListener('focus',checkRemote); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) checkRemote(); });
   setInterval(()=>{ if(!document.hidden) checkRemote(); },30000);
   // antes de cerrar, si hay algo pendiente, se intenta escribir ya
+  try{ history.replaceState({fz:0},''); }catch(e){} addEventListener('popstate',e=>{ const f=(e.state&&e.state.fz)||0; for(let i=f;i<NAVD&&HIST.length;i++) back(); NAVD=f; });   // hacia delante no deshace nada
   addEventListener('online',checkRemote); document.addEventListener('visibilitychange',()=>{ if(document.hidden&&(hasPending()||DIRTY)&&FILE.handle&&FILE.handle.gh) syncNow(); });
   if('serviceWorker' in navigator&&location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
   addEventListener('pagehide',()=>{ if((hasPending()||DIRTY)&&FILE.handle&&FILE.perm==='granted') syncNow(); });
   try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>applyTheme()); }catch(e){}
 
+  const POPSEL=[['[data-id]','f','id'],['[data-ej]','j','ej'],['[data-gv]','g','gv'],['[data-gx]','x','gx'],['[data-fn]','n','fn'],['[data-dgo]','y','dgo']];
+  const popClick=e=>{ if(!(e.metaKey||e.ctrlKey||e.button===1)) return; for(const [q,v,k] of POPSEL){ const el=e.target.closest&&e.target.closest(q); if(el&&el.dataset[k]){ e.preventDefault(); e.stopImmediatePropagation(); popOut(v,el.dataset[k]); return; } } };
+  document.addEventListener('click',popClick,true); document.addEventListener('auxclick',popClick,true);
   document.addEventListener('click',e=>{
     const t=e.target;
-    if(t.closest('#back')){ back(); return; }
+    if(t.closest('#back')){ navBack(); return; }
+    if(t.closest('.popout')){ const c=popCur(); if(c) popOut(c[0],c[1]); return; }
     const vb=t.closest('[data-view]'); if(vb){ const v=vb.dataset.view; if(v!==S.view||S.view==='e') go(()=>{ S.view=v; S.confirm=null; S.mapSel=null; render(); }); return; }
     // cambiar de asignatura: se abre su primera fórmula y todo (índice, glosario, mapa, color) pasa a ser solo de ella
     const mp=t.closest('.mt[data-mat]'); if(mp){ const m=mp.dataset.mat; if(m!==S.mat) go(()=>{ matEnter(m); render(); }); return; }
